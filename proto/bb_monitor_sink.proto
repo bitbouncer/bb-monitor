@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package bb_monitor;
+
+service MonitorSink {
+    // streaming
+    rpc PutMetrics  (stream MetricsBundle) returns (PutMetricsResponse) {}
+    rpc PutIntake (stream IntakeBundle) returns (PutIntakeResponse) {}
+    rpc PutLogs (stream LogBundle) returns (PutLogsResponse) {}
+
+    //non -streaming
+    rpc PutMetrics2 (MetricsBundle) returns (PutMetricsResponse) {}
+    rpc PutIntake2 (IntakeBundle) returns (PutIntakeResponse) {}
+    rpc PutLogs2 (LogBundle) returns (PutLogsResponse) {}
+}
+
+// GENERIC TYPES
+message Label {
+    string key = 1;
+    string value = 2;
+}
+
+// METRICS
+
+message LatLon {
+    // The latitude in degrees. It must be in the range [-90.0, +90.0].
+    double latitude = 1;
+
+    // The longitude in degrees. It must be in the range [-180.0, +180.0].
+    double longitude = 2;
+}
+
+message Measurement {
+    oneof MeasurementOneof {
+        int64 longValue = 1;
+        double doubleValue = 2;
+        LatLon latLonValue = 3;
+    }
+}
+
+message MetricsBundle {
+    repeated Metric metrics = 1;
+}
+
+message Metric {
+    string ns = 1;
+    string name = 2;
+    repeated Label labels = 3;
+    Measurement sample = 4;
+    int64 timestamp=5;
+}
+
+message PutMetricsResponse {
+    int64 count = 1;
+}
+
+// END METRICS
+
+
+// BEGIN INTAKE - THIS IS CLIENT INFO THAT IS SENT FROM DATADOG AGENT TO GET STAT FROM CLIENTS HOST
+// USED INTERNALY
+message IntakeBundle {
+    repeated Intake intake = 1;
+}
+
+message Intake {
+    string agent = 1;
+    string data = 2;
+    int64 timestamp=3;
+}
+
+message PutIntakeResponse {
+    int64 count = 1;
+}
+
+// END INTAKE 
+
+
+//LOGS
+//we use ns in logs to get logs in order (on one host)
+
+message LogBundle {
+    repeated LogLine logline = 1;
+}
+
+message LogLine {
+    string id = 1;
+    string agent = 2;
+    string host = 3;
+    string source = 4;
+    repeated Label labels = 5;
+    int64 timestamp_ns = 6;
+    string line = 7;
+}
+
+message PutLogsResponse {
+    int64 count = 1;
+}
+
+// END LOGS 
+
+
+

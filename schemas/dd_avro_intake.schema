@@ -1,0 +1,10 @@
+{ "type" : "record",
+  "name" : "dd_avro_intake_t",
+  "doc"  : "this is my doc",
+  "fields" : [
+    { "name": "agent", "type": "string" },
+    { "name": "data", "type": "string" },
+    { "name": "timestamp", "type": "long" }
+  ]
+}
+

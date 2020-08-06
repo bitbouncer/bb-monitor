@@ -1,0 +1,28 @@
+{ "type" : "record",
+  "name" : "bb_avro_logline",
+  "doc"  : "log line, inspired by datadog logs & splunk",
+  "fields" : [
+    { "name": "id", "type": "string" },
+    { "name": "agent", "type": "string" },
+    { "name": "host", "type": "string" },
+    { "name": "source", "type": "string" },
+    { "name": "timestamp_ns", "type": "long" },
+    {
+      "name":"tags",
+      "type":
+      {
+        "type":"array",
+        "items":
+        {
+          "type":"record",
+          "name":"bb_avro_logline_label_t",
+          "fields":[
+            { "name": "key", "type": "string" },
+            { "name": "value", "type": "string" }
+          ]
+        }
+      }
+    },
+    { "name": "line", "type": "string" }
+  ]
+}

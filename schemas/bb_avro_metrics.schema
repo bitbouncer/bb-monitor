@@ -1,0 +1,37 @@
+{ "type" : "record",
+  "name" : "bb_avro_metric_t",
+  "doc"  : "this is my doc",
+  "fields" : [
+    { "name": "ns", "type": "string" },
+    { "name": "name", "type": "string" },
+    {
+      "name":"labels",
+      "type":
+      {
+        "type":"array",
+        "items":
+        {
+          "type":"record",
+          "name":"bb_avro_metric_label_t",
+          "fields":[
+            { "name": "key", "type": "string" },
+            { "name": "value", "type": "string" }
+          ]
+        }
+      }
+    },
+    { "name": "value", "type": [
+                "null",  
+                "long",
+                "double",
+                { "type":"record", "name":"bb_avro_metric_pos_t", "fields":[
+                    { "name": "lat", "type": "double" },
+                    { "name": "lon", "type": "double" }
+                    ]
+                }
+            ] 
+    },
+    { "name": "timestamp", "type": "long" }
+  ]
+}
+
