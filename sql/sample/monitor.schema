@@ -1,0 +1,477 @@
+DROP VIEW IF EXISTS mqtt_device_auth_view;
+DROP VIEW IF EXISTS auth_view;
+DROP VIEW IF EXISTS admin_auth_view;
+DROP VIEW IF EXISTS mqtt_device_auth_view;
+DROP VIEW IF EXISTS topic_auth_view;
+DROP VIEW IF EXISTS api_auth_view;
+
+DROP TRIGGER  IF EXISTS update_bb_api_ts ON bb_api;
+DROP TABLE    IF EXISTS bb_api;
+
+DROP TRIGGER  IF EXISTS update_mqtt_device_ts ON mqtt_device;
+DROP TRIGGER  IF EXISTS update_mqtt_device_assign_text_id_column ON mqtt_device;
+DROP TABLE    IF EXISTS mqtt_device;
+
+DROP TRIGGER  IF EXISTS update_mqtt_broker_ts ON mqtt_broker;
+DROP TRIGGER  IF EXISTS update_mqtt_endpoint_ts ON mqtt_endpoint;
+DROP TRIGGER  IF EXISTS update_mqtt_broker_assign_text_id_column ON mqtt_broker;
+DROP TABLE    IF EXISTS mqtt_broker;
+DROP TABLE    IF EXISTS mqtt_endpoint;
+
+DROP TRIGGER  IF EXISTS update_bb_tenant_ts ON bb_tenant;
+--DROP TRIGGER  IF EXISTS update_bb_tenant_topic_ts ON bb_tenant_topic; -- delete
+DROP TRIGGER  IF EXISTS update_bb_topic_ts ON bb_topic;
+--DROP TRIGGER  IF EXISTS update_bb_tenant_security_group_ts on bb_tenant_security_group; -- delete
+DROP TRIGGER  IF EXISTS update_bb_security_group_ts on bb_security_group;
+DROP TRIGGER  IF EXISTS update_bb_tenant_assign_text_id ON bb_tenant;
+DROP TRIGGER  IF EXISTS update_api_security_group_ts ON api_security_group;
+
+DROP TRIGGER  IF EXISTS update_topic_security_group_ts ON topic_security_group;
+DROP TRIGGER  IF EXISTS update_api_security_group_ts ON api_security_group;
+
+DROP FUNCTION IF EXISTS update_ts_column();
+DROP FUNCTION IF EXISTS create_tenant(text,text,text,text,text,text);
+DROP PROCEDURE IF EXISTS create_tenant(int,text,text,text,text,text,text);
+--DROP FUNCTION IF EXISTS assign_int_text_id_column(); --delete??
+DROP FUNCTION IF EXISTS tenant_assign_text_id_column();
+
+
+CREATE OR REPLACE FUNCTION update_ts_column()   
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.ts = (extract(epoch from now()) * 1000);
+    RETURN NEW;   
+END;
+$$ language 'plpgsql';
+
+
+CREATE OR REPLACE FUNCTION pseudo_encrypt_int(VALUE int) returns int AS $$
+DECLARE
+l1 int;
+l2 int;
+r1 int;
+r2 int;
+i int:=0;
+BEGIN
+ l1:= (VALUE >> 16) & 65535;
+ r1:= VALUE & 65535;
+ WHILE i < 3 LOOP
+   l2 := r1;
+   r2 := l1 # ((((1366 * r1 + 150889) % 714025) / 714025.0) * 32767)::int;
+   l1 := l2;
+   r1 := r2;
+   i := i + 1;
+ END LOOP;
+ RETURN ((r1 << 16) + l1);
+END;
+$$ LANGUAGE plpgsql strict immutable;
+
+
+CREATE OR REPLACE FUNCTION pseudo_encrypt_bigint(VALUE bigint) returns bigint AS $$
+DECLARE
+l1 bigint;
+l2 bigint;
+r1 bigint;
+r2 bigint;
+i int:=0;
+BEGIN
+    l1:= (VALUE >> 32) & 4294967295::bigint;
+    r1:= VALUE & 4294967295;
+    WHILE i < 3 LOOP
+        l2 := r1;
+        r2 := l1 # ((((1366.0 * r1 + 150889) % 714025) / 714025.0) * 32767*32767)::int;
+        l1 := l2;
+        r1 := r2;
+        i := i + 1;
+    END LOOP;
+RETURN ((l1::bigint << 32) + r1);
+END;
+$$ LANGUAGE plpgsql strict immutable;
+
+
+CREATE OR REPLACE FUNCTION stringify_int(n int) RETURNS text
+    LANGUAGE plpgsql IMMUTABLE STRICT AS $$
+DECLARE
+ alphabet text:='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+ base int:=length(alphabet); 
+ _n bigint:=abs(n);
+ output text:='';
+BEGIN
+ LOOP
+   output := output || substr(alphabet, 1+(_n%base)::int, 1);
+   _n := _n / base; 
+   EXIT WHEN _n=0;
+ END LOOP;
+ RETURN output;
+END $$;
+
+-- textual id of int
+CREATE OR REPLACE FUNCTION assign_mqtt_tid_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.tid = stringify_int(pseudo_encrypt_int(NEW.id));
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+
+CREATE OR REPLACE FUNCTION stringify_bigint(n bigint) RETURNS text
+    LANGUAGE plpgsql IMMUTABLE STRICT AS $$
+DECLARE
+ alphabet text:='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+ base int:=length(alphabet); 
+ _n bigint:=abs(n);
+ output text:='';
+BEGIN
+ LOOP
+   output := output || substr(alphabet, 1+(_n%base)::int, 1);
+   _n := _n / base; 
+   EXIT WHEN _n=0;
+ END LOOP;
+ RETURN output;
+END $$;
+
+-- textual id of int
+--CREATE OR REPLACE FUNCTION assign_mqtt_text_id_column()
+--RETURNS TRIGGER AS $$
+--BEGIN
+--  NEW.text_id = stringify_bigint(pseudo_encrypt_bigint(NEW.id));
+--  RETURN NEW;
+--END;
+--$$ language 'plpgsql';
+
+
+
+CREATE OR REPLACE FUNCTION tenant_assign_text_id_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.tenant_text_id = stringify_int(pseudo_encrypt_int(NEW.tenant_id));
+  RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+DROP TABLE IF EXISTS bb_api;
+CREATE TABLE bb_api(
+   api_name             text PRIMARY KEY,
+   public_port          int NOT NULL,
+   ingres_port          int NOT NULL,
+   ts                   bigint NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled          BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted           BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TRIGGER update_bb_api_ts BEFORE UPDATE ON bb_api FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+
+DROP TABLE IF EXISTS bb_tenant;
+CREATE TABLE bb_tenant(
+   tenant_id                     int PRIMARY KEY,
+   tenant_text_id                text NOT NULL,
+   account_name                  text  NOT NULL,
+   primary_email                 text NOT NULL,
+   admin_api_key                 text NOT NULL,
+   admin_secret_access_key_hash  text NOT NULL,
+   api_key                       text,
+   api_w_secret                  text,
+   api_r_secret                  text,
+   ts                            bigint NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled                   BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted                    BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TRIGGER update_bb_tenant_ts BEFORE UPDATE ON bb_tenant FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+CREATE TRIGGER update_bb_tenant_assign_text_id BEFORE INSERT ON bb_tenant FOR EACH ROW EXECUTE PROCEDURE tenant_assign_text_id_column();
+
+DROP TABLE IF EXISTS bb_security_group;
+CREATE TABLE bb_security_group(
+   id                            BIGSERIAL NOT NULL,
+   tenant_id                     INT  NOT NULL,
+   security_group_name           TEXT  NOT NULL,
+   api_key                       TEXT NOT NULL,
+   secret_access_key             TEXT NOT NULL, -- remove this - should not be visible 
+   secret_access_key_hash        TEXT NOT NULL,
+   ts                            BIGINT NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled                   BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted                    BOOLEAN NOT NULL DEFAULT FALSE,
+   CONSTRAINT bb_security_group_pk PRIMARY KEY(tenant_id, security_group_name)
+);
+
+CREATE TRIGGER update_bb_security_group_ts BEFORE UPDATE ON bb_security_group FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+
+
+DROP TABLE IF EXISTS bb_topic;
+CREATE TABLE bb_topic(
+   id                   serial NOT NULL,
+   tenant_id            int  NOT NULL,
+   topic_name           text NOT NULL,
+   kafka_topic          text NOT NULL,
+   retention_time_ms    bigint,
+   compacted_segment_ms bigint,
+   ts                   bigint NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled          BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted           BOOLEAN NOT NULL DEFAULT FALSE,
+   CONSTRAINT bb_topic_pk PRIMARY KEY(tenant_id, topic_name)
+);
+
+CREATE TRIGGER update_bb_topic_ts BEFORE UPDATE ON bb_topic FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+
+DROP TABLE IF EXISTS topic_security_group;
+CREATE TABLE topic_security_group(
+   id                   SERIAL,
+   tenant_id            INT  NOT NULL,
+   topic_name           TEXT NOT NULL,
+   security_group_name  TEXT NOT NULL,
+   read_access          BOOL NOT NULL,
+   write_access         BOOL NOT NULL,
+   ts                   BIGINT NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled          BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted           BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TRIGGER update_topic_security_group_ts BEFORE UPDATE ON topic_security_group FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+
+
+DROP TABLE IF EXISTS api_security_group;
+CREATE TABLE api_security_group(
+   id                   SERIAL,
+   tenant_id            INT  NOT NULL,
+   api_name             TEXT NOT NULL,
+   security_group_name  TEXT NOT NULL,
+   read_access          BOOL NOT NULL,
+   write_access         BOOL NOT NULL,
+   ts                   BIGINT NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled          BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted           BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TRIGGER update_api_security_group_ts BEFORE UPDATE ON api_security_group FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+
+
+DROP PROCEDURE IF EXISTS dev_create_api(text,int);
+DROP PROCEDURE IF EXISTS dev_create_api(text,int, int);
+CREATE OR REPLACE PROCEDURE dev_create_api(api_name text, public_port int, ingres_port int) 
+AS $$
+ BEGIN
+  INSERT INTO bb_api (api_name, public_port, ingres_port)
+  VALUES ( api_name, public_port, ingres_port);
+END;
+$$ language 'plpgsql';
+
+
+DROP PROCEDURE IF EXISTS dev_create_api_security_group(integer,text,text,boolean, boolean);
+CREATE OR REPLACE PROCEDURE dev_create_api_security_group(tenant_id int, api_name text, security_group_name text, read_access boolean, write_access boolean)
+AS $$
+ BEGIN
+  INSERT INTO api_security_group (tenant_id, api_name, security_group_name, read_access, write_access)
+  VALUES ( tenant_id, api_name, security_group_name, read_access, write_access);
+END;
+$$ language 'plpgsql';
+
+
+
+DROP PROCEDURE IF EXISTS dev_create_topic_security_group(integer,text,text,boolean, boolean);
+CREATE OR REPLACE PROCEDURE dev_create_topic_security_group(tenant_id int, topic_name text, security_group_name text, read_access boolean, write_access boolean) 
+AS $$
+ BEGIN
+  INSERT INTO topic_security_group (tenant_id, topic_name, security_group_name, read_access, write_access)
+  VALUES ( tenant_id, topic_name, security_group_name, read_access, write_access);
+END;
+$$ language 'plpgsql';
+
+
+DROP PROCEDURE IF EXISTS dev_create_default_topic(integer,text,text,bigint);
+CREATE OR REPLACE PROCEDURE dev_create_default_topic(tenant_id int, topic_name text, topic_prefix text, retention_time_ms bigint) 
+AS $$
+ BEGIN
+  INSERT INTO bb_topic (tenant_id, topic_name, kafka_topic, retention_time_ms)
+  VALUES ( tenant_id, topic_name, 'BB_MONITOR_C' || tenant_id || '_' || topic_prefix || '_' || topic_name, retention_time_ms);
+END;
+$$ language 'plpgsql';
+
+DROP PROCEDURE IF EXISTS map_custom_topic(integer,text,text);
+CREATE OR REPLACE PROCEDURE map_custom_topic(tenant_id int, topic_name text, kafka_topic text)
+AS $$
+ BEGIN
+  INSERT INTO bb_topic (tenant_id, topic_name, kafka_topic)
+  VALUES ( tenant_id, topic_name, kafka_topic);
+
+  CALL dev_create_topic_security_group(tenant_id, topic_name, 'default-read', TRUE, FALSE);
+END;
+$$ language 'plpgsql';
+
+DROP PROCEDURE IF EXISTS create_tenant(integer,text,text,text,text,text,text);
+CREATE OR REPLACE PROCEDURE create_tenant(tenant_id int, topic_prefix text, account_name text, primary_email text, api_key text, admin_api_key text, admin_secret_access_key_hash text) 
+AS $$
+ BEGIN
+ 
+  INSERT INTO bb_tenant (tenant_id, account_name, primary_email, api_key, admin_api_key, admin_secret_access_key_hash)
+  VALUES ( tenant_id, account_name, primary_email, api_key, admin_api_key, admin_secret_access_key_hash) ;
+
+  INSERT INTO bb_security_group (tenant_id, security_group_name, api_key, secret_access_key, secret_access_key_hash)
+  VALUES 
+    ( tenant_id, 'default-write', api_key, '', md5('')), 
+    ( tenant_id, 'default-read', api_key, 'dummy-key', md5('dummy-key')); 
+
+  CALL dev_create_default_topic(tenant_id, 'metrics', topic_prefix, 2592000000);      -- METRICS
+  CALL dev_create_default_topic(tenant_id, 'logs', topic_prefix, 2592000000);         -- LOGS
+  CALL dev_create_default_topic(tenant_id, 'intake', topic_prefix, 2592000000);       -- DATADOG
+
+  CALL dev_create_api_security_group(tenant_id, 'KAFKA-GRPC-PROXY', 'default', TRUE, FALSE);
+  CALL dev_create_api_security_group(tenant_id, 'METRICS-SINK',     'default', TRUE, TRUE);
+  CALL dev_create_api_security_group(tenant_id, 'NAGIOS-ADMIN-API', 'default', TRUE, TRUE);
+  CALL dev_create_api_security_group(tenant_id, 'NAGIOS-CONTROL',   'default', TRUE, FALSE);
+
+  CALL dev_create_topic_security_group(tenant_id, 'metrics', 'default-write', FALSE, TRUE);
+  CALL dev_create_topic_security_group(tenant_id, 'logs',    'default-write', FALSE, TRUE);
+  CALL dev_create_topic_security_group(tenant_id, 'intake',  'default-write', FALSE, TRUE);
+
+  CALL dev_create_topic_security_group(tenant_id, 'metrics', 'default-read', TRUE, FALSE);
+  CALL dev_create_topic_security_group(tenant_id, 'logs',    'default-read', TRUE, FALSE);
+  CALL dev_create_topic_security_group(tenant_id, 'intake',  'default-read', TRUE, FALSE);
+END;
+$$ language 'plpgsql';
+
+
+DROP TABLE IF EXISTS versions;
+CREATE TABLE IF NOT EXISTS versions
+(
+key     TEXT PRIMARY KEY,
+version TEXT
+);
+
+CREATE TABLE IF NOT EXISTS mqtt_endpoint
+(
+id            BIGSERIAL NOT NULL, 
+tenant_id     INTEGER NOT NULL REFERENCES bb_tenant,
+endpoint_name TEXT NOT NULL,
+kind          INTEGER NOT NULL, 
+broker_uri    TEXT,
+ts            bigint NOT NULL default (extract(epoch from now()) * 1000),
+is_disabled   BOOLEAN NOT NULL DEFAULT FALSE,
+is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,
+CONSTRAINT    mqtt_broker_pk PRIMARY KEY(tenant_id, endpoint_name),
+CONSTRAINT    mqtt_broker_fk0 FOREIGN KEY(tenant_id) REFERENCES bb_tenant(tenant_id)
+);
+
+CREATE TRIGGER update_mqtt_endpoint_ts BEFORE UPDATE ON mqtt_endpoint FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+
+
+CREATE TABLE IF NOT EXISTS mqtt_device
+(
+id                      BIGSERIAL NOT NULL,
+tenant_id               INTEGER NOT NULL,
+endpoint_name           TEXT NOT NULL,
+device_name             TEXT NOT NULL, 
+api_key                 TEXT NOT NULL,
+secret_access_key       TEXT NOT NULL, -- remove this this should not be visible 
+secret_access_key_hash  TEXT NOT NULL,
+ts                      bigint NOT NULL default (extract(epoch from now()) * 1000),
+is_disabled             BOOLEAN NOT NULL DEFAULT FALSE,
+is_deleted              BOOLEAN NOT NULL DEFAULT FALSE,
+CONSTRAINT mqtt_device_pk PRIMARY KEY(tenant_id, endpoint_name, device_name),
+CONSTRAINT mqtt_device_fk0 FOREIGN KEY(tenant_id, endpoint_name) REFERENCES mqtt_endpoint(tenant_id, endpoint_name)
+);
+
+CREATE TRIGGER update_mqtt_device_ts BEFORE UPDATE ON mqtt_device FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+
+
+CREATE OR REPLACE PROCEDURE create_custom_endpoint(tenant_id int, endpoint_name text, kind int, broker_uri text)
+AS $$
+ BEGIN
+   INSERT INTO mqtt_endpoint (tenant_id, endpoint_name, kind, broker_uri) VALUES
+  (tenant_id, endpoint_name, kind, broker_uri);
+END;
+$$ language 'plpgsql';
+
+
+
+CREATE VIEW auth_view AS
+select 
+bb_topic.id,
+t.tenant_id,
+GREATEST(t.ts, bb_topic.ts) as ts,
+t.is_disabled,
+t.is_deleted,
+t.api_key, 
+t.api_w_secret, 
+t.api_r_secret, 
+bb_topic.topic_name, 
+bb_topic.kafka_topic
+FROM bb_tenant AS t 
+INNER JOIN bb_topic on t.tenant_id = bb_topic.tenant_id;
+
+
+CREATE VIEW admin_auth_view AS
+select 
+tenant_id as id,
+tenant_id,
+ts,
+is_disabled,
+is_deleted,
+admin_api_key, 
+admin_secret_access_key_hash
+FROM bb_tenant;
+
+
+CREATE VIEW mqtt_device_auth_view AS
+SELECT 
+  mqtt_device.id,
+  mqtt_device.tenant_id, 
+  mqtt_device.endpoint_name,
+  mqtt_device.device_name,
+  mqtt_device.api_key, 
+  mqtt_device.secret_access_key_hash, 
+  mqtt_endpoint.broker_uri,
+  GREATEST(mqtt_device.ts, mqtt_endpoint.ts, tenant.ts) AS ts, 
+  GREATEST(tenant.is_disabled, mqtt_endpoint.is_disabled, mqtt_device.is_disabled) as is_disabled,
+  GREATEST(tenant.is_deleted, mqtt_endpoint.is_deleted, mqtt_device.is_deleted) as is_deleted
+FROM 
+  public.bb_tenant as tenant, 
+  public.mqtt_device as mqtt_device, 
+  public.mqtt_endpoint as mqtt_endpoint
+WHERE 
+  mqtt_device.endpoint_name = mqtt_endpoint.endpoint_name AND
+  mqtt_device.tenant_id = mqtt_endpoint.tenant_id AND
+  mqtt_device.tenant_id = tenant.tenant_id;
+
+
+CREATE VIEW topic_auth_view AS
+SELECT 
+  tsg.id,
+  tsg.tenant_id, 
+  tsg.topic_name,
+  bb_topic.kafka_topic,
+  sg.api_key, 
+  sg.secret_access_key_hash, 
+  tsg.read_access,
+  tsg.write_access,
+  GREATEST(tsg.ts, sg.ts, bb_topic.ts, bb_tenant.ts) AS ts,
+  GREATEST(tsg.is_disabled, sg.is_disabled, bb_topic.is_disabled, bb_tenant.is_disabled) as is_disabled,
+  GREATEST(tsg.is_deleted, sg.is_deleted, bb_topic.is_deleted, bb_tenant.is_deleted) as is_deleted
+FROM 
+  topic_security_group as tsg 
+  LEFT JOIN bb_security_group as sg ON tsg.tenant_id = sg.tenant_id and tsg.security_group_name = sg.security_group_name
+  LEFT JOIN bb_topic ON tsg.tenant_id = bb_topic.tenant_id and tsg.topic_name = bb_topic.topic_name
+  LEFT JOIN bb_tenant ON tsg.tenant_id = bb_tenant.tenant_id;
+
+
+
+CREATE VIEW api_auth_view AS
+SELECT 
+  asg.id,
+  asg.tenant_id, 
+  asg.api_name,
+  sg.api_key, 
+  sg.secret_access_key_hash, 
+  asg.read_access,
+  asg.write_access,
+  GREATEST(asg.ts, sg.ts, bb_api.ts, bb_tenant.ts) AS ts,
+  GREATEST(asg.is_disabled, sg.is_disabled, bb_api.is_disabled, bb_tenant.is_disabled) as is_disabled,
+  GREATEST(asg.is_deleted, sg.is_deleted, bb_api.is_deleted, bb_tenant.is_deleted) as is_deleted
+FROM 
+  api_security_group as asg 
+  LEFT JOIN bb_security_group as sg ON asg.security_group_name = sg.security_group_name AND asg.tenant_id = sg.tenant_id
+  LEFT JOIN bb_api ON asg.api_name = bb_api.api_name
+  LEFT JOIN bb_tenant ON sg.tenant_id = bb_tenant.tenant_id;
+
+
+

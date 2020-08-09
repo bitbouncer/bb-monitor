@@ -1,0 +1,55 @@
+
+CALL dev_create_api('MQTT',             8883,  99000);
+CALL dev_create_api('KAFKA-GRPC-PROXY', 1000,  99000);
+CALL dev_create_api('METRICS-SINK',     1001,  99000);
+CALL dev_create_api('MQTT-ADMIN-API',   1002,  99000);
+CALL dev_create_api('NAGIOS-ADMIN-API', 1003,  99000);
+
+CALL create_tenant(8, 'STAGING', 'staging', 'svante.karlsson@csi.se', '07a305d3-d2b1-498a-86cb-743e51447016', '07a305d3-d2b1-498a-86cb-743e51447016', md5('bb-staging'));
+
+
+--MQTT STAGING
+CALL dev_create_api_security_group(8, 'MQTT',           'default', TRUE, TRUE);
+CALL dev_create_api_security_group(8, 'MQTT-ADMIN-API', 'default', TRUE, TRUE);
+
+-- give staging some mqtt endpoints
+CALL create_custom_endpoint(8, 'kafka-sink', 0, 'mqtt-kafka-sink:1883');
+CALL create_custom_endpoint(8, 'mosquitto',  1, 'mosquitto-dev:1883');
+CALL create_custom_endpoint(8, 'localhost',  2, 'localhost:1883');
+
+
+-- LETS INSERT 1000000 items for testing
+INSERT INTO mqtt_device (tenant_id, endpoint_name, device_name, api_key, secret_access_key, secret_access_key_hash)
+SELECT
+8, 'kafka-sink', 'dev#' || x.id, md5(concat('8#', 'kafka-sink#', 'dev#' || x.id)), 'dummy-key', md5('dummy-key')
+FROM generate_series(1,10) AS x(id);
+
+INSERT INTO mqtt_device (tenant_id, endpoint_name, device_name, api_key, secret_access_key, secret_access_key_hash)
+SELECT
+8, 'mosquitto', 'dev#' || x.id, md5(concat('8#', 'mosquitto#', 'dev#' || x.id)), 'dummy-key', md5('dummy-key')
+FROM generate_series(1,5) AS x(id);
+
+
+INSERT INTO mqtt_device (tenant_id, endpoint_name, device_name, api_key, secret_access_key, secret_access_key_hash)
+SELECT
+8, 'localhost', 'dev#' || x.id, md5(concat('8#', 'localhost#', 'dev#' || x.id)), 'dummy-key', md5('dummy-key')
+FROM generate_series(1,5) AS x(id);
+
+
+
+
+
+-- MQTT saka / antilia
+
+CALL create_tenant(3, 'SAKA',    '@home', 'svante.karlsson@csi.se', '48033f6f-f76a-433d-8084-5f8058684875', '48033f6f-f76a-433d-8084-5f8058684875', md5('dummy-key'));
+
+CALL dev_create_api_security_group(3, 'MQTT',           'default', TRUE, TRUE);
+CALL dev_create_api_security_group(3, 'MQTT-ADMIN-API', 'default', TRUE, TRUE);
+
+-- give saka some mqtt endpoints
+CALL create_custom_endpoint(3, 'kafka-sink', 0, 'mqtt-kafka-sink:1883');
+CALL create_custom_endpoint(3, 'mosquitto',  1, 'mosquitto-dev:1883');
+CALL create_custom_endpoint(3, 'localhost',  2, 'localhost:1883');
+
+
+

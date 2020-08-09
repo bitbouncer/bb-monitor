@@ -1,0 +1,109 @@
+CREATE EXTENSION IF NOT EXISTS hstore;
+
+DROP TRIGGER  IF EXISTS update_nagios_env_ts ON nagios_env;
+DROP TRIGGER  IF EXISTS update_nagios_host_ts ON nagios_host;
+DROP TRIGGER  IF EXISTS update_nagios_hostgroup_ts ON nagios_hostgroup;
+DROP TRIGGER  IF EXISTS update_nagios_command_ts ON nagios_command;
+DROP TRIGGER  IF EXISTS update_nagios_service_ts ON nagios_service;
+
+DROP FUNCTION IF EXISTS update_ts_column();
+
+CREATE OR REPLACE FUNCTION update_ts_column()   
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.ts = (extract(epoch from now()) * 1000);
+    RETURN NEW;   
+END;
+$$ language 'plpgsql';
+
+
+DROP TABLE IF EXISTS versions;
+CREATE TABLE IF NOT EXISTS versions
+(
+key     TEXT PRIMARY KEY,
+version TEXT
+);
+
+DROP TABLE IF EXISTS nagios_env;
+CREATE TABLE nagios_env(
+   id               BIGSERIAL,
+   tenant_id        INT NOT NULL,
+   env_name         TEXT NOT NULL,
+   attrs            HSTORE,
+   ts               BIGINT NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled      BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted       BOOLEAN NOT NULL DEFAULT FALSE,
+   PRIMARY KEY(tenant_id, env_name)
+);
+CREATE TRIGGER update_nagios_env_ts BEFORE UPDATE ON nagios_env FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+CREATE INDEX ON nagios_env (ts);
+
+
+DROP TABLE IF EXISTS nagios_host;
+CREATE TABLE nagios_host(
+   id             BIGSERIAL,
+   tenant_id      INT NOT NULL,
+   host_name      TEXT NOT NULL,
+   use            TEXT,
+   address        TEXT,
+   hostgroups     TEXT [],
+   attrs          HSTORE,
+   labels         HSTORE,
+   ts             BIGINT NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled    BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted     BOOLEAN NOT NULL DEFAULT FALSE,
+   PRIMARY KEY(tenant_id, host_name)
+);
+CREATE TRIGGER update_nagios_host_ts BEFORE UPDATE ON nagios_host FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+CREATE INDEX ON nagios_host (ts);
+
+DROP TABLE IF EXISTS nagios_hostgroup;
+CREATE TABLE nagios_hostgroup(
+   id             BIGSERIAL,
+   tenant_id      INT NOT NULL,
+   hostgroup_name TEXT NOT NULL,
+   use            TEXT,
+   members        TEXT [],
+   attrs          HSTORE,
+   labels         HSTORE,
+   ts             BIGINT NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled    BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted     BOOLEAN NOT NULL DEFAULT FALSE,
+   PRIMARY KEY(tenant_id, hostgroup_name)
+);
+CREATE TRIGGER update_nagios_hostgroup_ts BEFORE UPDATE ON nagios_hostgroup FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+CREATE INDEX ON nagios_hostgroup (ts);
+
+DROP TABLE IF EXISTS nagios_command;
+CREATE TABLE nagios_command(
+   id             BIGSERIAL,
+   tenant_id      INT NOT NULL,
+   command_name   TEXT NOT NULL,
+   command_line   TEXT NOT NULL,
+   ts             BIGINT NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled    BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted     BOOLEAN NOT NULL DEFAULT FALSE,
+   PRIMARY KEY(tenant_id, command_name)
+);
+CREATE TRIGGER update_nagios_command_ts BEFORE UPDATE ON nagios_command FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+CREATE INDEX ON nagios_command (ts);
+
+DROP TABLE IF EXISTS nagios_service;
+CREATE TABLE nagios_service(
+   id             BIGSERIAL,
+   tenant_id      INT NOT NULL,
+   service_name   TEXT NOT NULL,
+   use            TEXT,
+   check_command  TEXT,
+   hosts          TEXT [],
+   hostgroups     TEXT [],
+   servicegroups  TEXT [],
+   attrs          HSTORE,
+   labels         HSTORE,
+   ts             BIGINT NOT NULL default (extract(epoch from now()) * 1000),
+   is_disabled    BOOLEAN NOT NULL DEFAULT FALSE,
+   is_deleted     BOOLEAN NOT NULL DEFAULT FALSE,
+   PRIMARY KEY(tenant_id, service_name)
+);
+CREATE TRIGGER update_nagios_service_ts BEFORE UPDATE ON nagios_service FOR EACH ROW EXECUTE PROCEDURE update_ts_column();
+CREATE INDEX ON nagios_service (ts);

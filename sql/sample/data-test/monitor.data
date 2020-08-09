@@ -1,0 +1,39 @@
+
+CALL dev_create_api('MQTT',             8883,  99000);
+CALL dev_create_api('KAFKA-GRPC-PROXY', 1000,  99000);
+CALL dev_create_api('METRICS-SINK',     1001,  99000);
+CALL dev_create_api('MQTT-ADMIN-API',   1002,  99000);
+CALL dev_create_api('NAGIOS-ADMIN-API', 1003,  99000);
+
+CALL create_tenant(9, 'TEST',    'test', 'svante.karlsson@csi.se', '51a6695a-434a-4815-a62a-9949c5265a0a', '51a6695a-434a-4815-a62a-9949c5265a0a', md5('bb-testing'));
+
+--MQTT
+
+CALL dev_create_api_security_group(9, 'MQTT',           'default', TRUE, TRUE);
+CALL dev_create_api_security_group(9, 'MQTT-ADMIN-API', 'default', TRUE, TRUE);
+
+-- give saka some mqtt endpoints
+CALL create_custom_endpoint(9, 'kafka-sink', 0, 'mqtt-kafka-sink:1883');
+CALL create_custom_endpoint(9, 'mosquitto',  1, 'mosquitto-dev:1883');
+CALL create_custom_endpoint(9, 'localhost',  2, 'localhost:1883');
+
+
+-- LETS INSERT 1000000 items for testing
+INSERT INTO mqtt_device (tenant_id, endpoint_name, device_name, api_key, secret_access_key, secret_access_key_hash)
+SELECT
+9, 'kafka-sink', 'dev#' || x.id, md5(concat('9#', 'kafka-sink#', 'dev#' || x.id)), 'dummy-key', md5('dummy-key')
+FROM generate_series(1,10) AS x(id);
+
+INSERT INTO mqtt_device (tenant_id, endpoint_name, device_name, api_key, secret_access_key, secret_access_key_hash)
+SELECT
+9, 'mosquitto', 'dev#' || x.id, md5(concat('9#', 'mosquitto#', 'dev#' || x.id)), 'dummy-key', md5('dummy-key')
+FROM generate_series(1,5) AS x(id);
+
+
+INSERT INTO mqtt_device (tenant_id, endpoint_name, device_name, api_key, secret_access_key, secret_access_key_hash)
+SELECT
+9, 'localhost', 'dev#' || x.id, md5(concat('9#', 'localhost#', 'dev#' || x.id)), 'dummy-key', md5('dummy-key')
+FROM generate_series(1,5) AS x(id);
+
+
+

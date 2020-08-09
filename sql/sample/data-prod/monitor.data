@@ -1,0 +1,55 @@
+
+CALL dev_create_api('MQTT',             8883,  99000);
+CALL dev_create_api('KAFKA-GRPC-PROXY', 1000,  99000);
+CALL dev_create_api('METRICS-SINK',     1001,  99000);
+CALL dev_create_api('MQTT-ADMIN-API',   1002,  99000);
+CALL dev_create_api('NAGIOS-ADMIN-API', 1003,  99000);
+
+CALL create_tenant(1, 'DEV',     '@pubic_test_account', 'svante.karlsson@csi.se', '4b022c8d-4852-4831-8afc-54fae5f62bc2', '4b022c8d-4852-4831-8afc-54fae5f62bc2', md5('dummy-key'));
+CALL create_tenant(2, 'CSI',     'csi', 'svante.karlsson@csi.se', '8dfc2553-7a16-4bcb-b712-072c60b1c124', '8dfc2553-7a16-4bcb-b712-072c60b1c124', md5('dummy-key'));
+CALL create_tenant(3, 'SAKA',    '@home', 'svante.karlsson@csi.se', '48033f6f-f76a-433d-8084-5f8058684875', '48033f6f-f76a-433d-8084-5f8058684875', md5('dummy-key'));
+CALL create_tenant(4, 'TOMH',    '@home', 'tom.holmisto@csi.se', '567db90d-478e-40a4-9555-ef3cb7eff595', '567db90d-478e-40a4-9555-ef3cb7eff595', md5('dummy-key'));
+CALL create_tenant(5, 'AZ',      '@home', 'anders@zommarin.se', 'e330f2f6-4616-41be-b6e1-cc9c5aeeae4d', 'e330f2f6-4616-41be-b6e1-cc9c5aeeae4d', md5('dummy-key'));
+CALL create_tenant(6, 'DOOR',    '@doorling', 'svante.karlsson@csi.se', '7fcba947-da6f-461d-ac89-f5aa4759321e', '7fcba947-da6f-461d-ac89-f5aa4759321e', md5('dummy-key'));
+CALL create_tenant(7, 'DEMO',    'demo', 'svante.karlsson@csi.se', '455bbfd0-8d2e-11e9-bc42-526af7764f64', '455bbfd0-8d2e-11e9-bc42-526af7764f64', md5('dummy-key'));
+CALL create_tenant(8, 'STAGING', 'staging', 'svante.karlsson@csi.se', '07a305d3-d2b1-498a-86cb-743e51447016', '07a305d3-d2b1-498a-86cb-743e51447016', md5('bb-staging'));
+CALL create_tenant(9, 'TEST',    'test', 'svante.karlsson@csi.se', '51a6695a-434a-4815-a62a-9949c5265a0a', '51a6695a-434a-4815-a62a-9949c5265a0a', md5('bb-testing'));
+
+--SPECIAL FIXES FOR DOORLING
+
+CALL map_custom_topic(6, 'MON-DOORLING-logs', 'MON-DOORLING-logs');
+CALL map_custom_topic(6, 'MON-DOORLING-prometheus-metrics', 'MON-DOORLING-prometheus-metrics'); -- used??
+
+CALL map_custom_topic(6, 'PROD_doorling_es_realest', 'PROD_doorling_es_realest');
+
+CALL map_custom_topic(6, 'PROD_krogsveen_broker_reviews',         'PROD_krogsveen_broker_reviews');
+CALL map_custom_topic(6, 'PROD_krogsveen_classed_pictures',       'PROD_krogsveen_classed_pictures');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_appointment',       'PROD_krogsveen_next_appointment');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_broker',            'PROD_krogsveen_next_broker');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_customer_interest', 'PROD_krogsveen_next_customer_interest');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_customers',         'PROD_krogsveen_next_customers');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_department',        'PROD_krogsveen_next_department');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_employee',          'PROD_krogsveen_next_employee');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_objpict',           'PROD_krogsveen_next_objpict');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_prospect',          'PROD_krogsveen_next_prospect');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_realest',           'PROD_krogsveen_next_realest');
+CALL map_custom_topic(6, 'PROD_krogsveen_next_realest_state',     'PROD_krogsveen_next_realest_state');
+CALL map_custom_topic(6, 'PROD_krogsveen_realest_documents',      'PROD_krogsveen_realest_documents');
+
+CALL map_custom_topic(1, 'AIS_RAW',                               'BB_AISHUB_RAW');
+
+
+--MQTT
+
+CALL dev_create_api_security_group(3, 'MQTT',           'default', TRUE, TRUE);
+CALL dev_create_api_security_group(3, 'MQTT-ADMIN-API', 'default', TRUE, TRUE);
+
+-- give saka some mqtt endpoints
+CALL create_custom_endpoint(3, 'kafka-sink', 0, 'mqtt-kafka-sink:1883');
+CALL create_custom_endpoint(3, 'mosquitto',  1, 'mosquitto-dev:1883');
+CALL create_custom_endpoint(3, 'localhost',  2, 'localhost:1883');
+
+
+
+
+
