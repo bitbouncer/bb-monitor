@@ -6,6 +6,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 
 option(BUILD_STATIC_LIBS "enable static linking support" ON)
 option(BUILD_SHARED_LIBS "enable shared linking support" OFF)
+option(LINK_SHARED "enable static linking support" OFF)
 
 #GLOBAL DEFINITIONS
 add_definitions(-DRAPIDJSON_HAS_STDSTRING)
@@ -32,7 +33,7 @@ find_package(Protobuf REQUIRED)
 message(STATUS "Using protobuf ${protobuf_VERSION}")
 find_package(GRPC REQUIRED)
 
-SET(PROTOS 
+SET(PROTOS
   ./proto/bb_streaming.proto
   ./proto/bb_monitor_sink.proto
 )
@@ -59,6 +60,8 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
 find_package(PostgreSQL REQUIRED)
 include_directories(${PostgreSQL_INCLUDE_DIRS})
+
+find_package(absl REQUIRED)
 
 if (BUILD_STATIC_LIBS)
     ADD_LIBRARY(bb-monitor-proto_s STATIC ${PROTO_SRCS} ${GRPC_SRCS})
@@ -97,19 +100,19 @@ SET(LIBRDKAFKA_LIBS rdkafka++ rdkafka)
 SET(PROMETHEUS_CPP_LIBS prometheus-cpp-core prometheus-cpp-push)
 SET(PostgreSQL_LIBRARIES pq)
 SET(AWS_S3_LIBS aws-cpp-sdk-s3 aws-cpp-sdk-core aws-c-event-stream aws-checksums aws-c-common)
-SET(EXT_LIBS ${AVRO_LIBS} ${ROCKSDB_LIBS} ${LIBRDKAFKA_LIBS} ${PROMETHEUS_CPP_LIBS} ${BOOST_LIBS} ${PostgreSQL_LIBRARIES} ${BB_GRPC_LIBS_STATIC} cares glog gflags crypto ssl stdc++fs dl)
 
-SET(BB_GRPC_LIBS_STATIC bb-monitor-proto_s gRPC::grpc++_reflection gRPC::grpc++ gRPC::grpc protobuf::libprotobuf)
-SET(BB_GRPC_LIBS_SHARED bb-monitor-proto gRPC::grpc++_reflection gRPC::grpc++ gRPC::grpc protobuf::libprotobuf)
+SET(BB_GRPC_LIBS gRPC::grpc++_reflection gRPC::grpc++ gRPC::grpc protobuf::libprotobuf gpr upb address_sorting re2 boringssl-ssl boringssl-crypto)
+SET(ABSEIL_LIBS absl::time absl::status absl::synchronization absl::strings absl::str_format absl::memory absl::base)
+SET(EXT_LIBS ${AVRO_LIBS} ${AWS_S3_LIBS} ${ROCKSDB_LIBS} ${LIBRDKAFKA_LIBS} ${PROMETHEUS_CPP_LIBS} ${BOOST_LIBS} ${PostgreSQL_LIBRARIES} ${BB_GRPC_LIBS} ${ABSEIL_LIBS} cares glog gflags  stdc++fs dl)
 
 add_definitions(-DRESTINIO_USE_BOOST_ASIO)
 SET(RESTINIO_LIBS fmt http_parser)
 
-SET(BB_MONITOR_SERV_LIBS_SHARED bb-monitor-srv-utils bb-monitor-client-utils bb-monitor-utils ${BB_GRPC_LIBS_SHARED} kspp ${EXT_LIBS})
-SET(BB_MONITOR_SERV_LIBS_STATIC bb-monitor-srv-utils_s bb-monitor-client-utils_s bb-monitor-utils_s ${BB_GRPC_LIBS_STATIC} kspp_s ${EXT_LIBS})
+SET(BB_MONITOR_SERV_LIBS_SHARED bb-monitor-srv-utils   bb-monitor-client-utils   bb-monitor-utils bb-monitor-proto kspp_grpc kspp      ${EXT_LIBS})
+SET(BB_MONITOR_SERV_LIBS_STATIC bb-monitor-srv-utils_s bb-monitor-client-utils_s bb-monitor-utils_s bb-monitor-proto_s kspp_grpc_s kspp_s  ${EXT_LIBS})
 
-SET(BB_MONITOR_CLIENT_LIBS_SHARED bb-monitor-client-utils bb-monitor-utils ${BB_GRPC_LIBS_SHARED} kspp ${EXT_LIBS})
-SET(BB_MONITOR_CLIENT_LIBS_STATIC bb-monitor-client-utils_s bb-monitor-utils_s ${BB_GRPC_LIBS_STATIC} kspp_s kspp_grpc_s ${EXT_LIBS} ${AWS_S3_LIBS})
+SET(BB_MONITOR_CLIENT_LIBS_SHARED bb-monitor-client-utils bb-monitor-utils bb-monitor-proto kspp_grpc kspp ${EXT_LIBS})
+SET(BB_MONITOR_CLIENT_LIBS_STATIC bb-monitor-client-utils_s bb-monitor-utils_s bb-monitor-proto_s kspp_grpc_s kspp_s ${EXT_LIBS})
 
 include_directories(${EXT_INCLUDE_PATH} ${CMAKE_SOURCE_DIR}/libraries)
 

@@ -1,6 +1,12 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 WORKDIR /root/
+
+ENV TZ=GMT
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+
 
 COPY extract/bin  /usr/local/bin
 COPY extract/lib  /usr/local/lib
