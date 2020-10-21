@@ -22,7 +22,7 @@ export ROCKDB_VER="v6.11.4"
 export LIBRDKAFKA_VER="v1.5.0-RC1"
 export PROMETHEUS_CPP_VER="v0.9.0"
 
-export KSPP_VER="v0.9.1"
+export KSPP_VER="v0.9.2"
 
 export CATCH2_VER="v2.11.3"
 export RESTINIO_VER="v.0.6.0"
