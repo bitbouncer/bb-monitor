@@ -1,6 +1,7 @@
 #include "pg_utils.h"
 #include <algorithm>
 #include <exception>
+#include <stdexcept>
 
 template<> std::optional<std::string> pg_get_value<std::string>(PGresult* pgres, size_t row, std::string column_name) {
   int column_index = PQfnumber(pgres, column_name.c_str());
